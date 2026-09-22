@@ -1,0 +1,6 @@
+{
+  "name": "Aegis",
+  "description": "Aplicativo inteligente de segurança digital e proteção contra golpes virtuais com IA Lia, feed social 100% anônimo de relatos, painel do usuário e auditoria de denúncias, verificador multimídia, bloqueador de chamadas, radar de vazamentos e cofre digital.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

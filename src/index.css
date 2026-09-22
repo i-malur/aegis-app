@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-heading: 'Montserrat', 'Roboto', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #14151a;
+  color: #d2d2d2;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+
+/* Refined custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #14151a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2e3a;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a6ea5;
+}
+
+/* Modern Clean Dark Card Utility */
+.app-card {
+  background-color: #1b1d23;
+  border: 1px solid rgba(104, 104, 104, 0.25);
+  border-radius: 1rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-card:hover {
+  border-color: rgba(112, 243, 255, 0.35);
+  box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.5);
+}
+
+.app-input {
+  background-color: #14151a;
+  border: 1px solid rgba(104, 104, 104, 0.35);
+  color: #d2d2d2;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.app-input:focus {
+  border-color: #70f3ff;
+  box-shadow: 0 0 0 2px rgba(112, 243, 255, 0.15);
+  outline: none;
+}
+
+
+

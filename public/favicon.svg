@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Outer Gold Ring / Shield Base -->
+  <circle cx="32" cy="32" r="30" fill="#0d0e13" stroke="#dfcf93" stroke-width="3" />
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#dfcf93" stroke-width="1.5" stroke-dasharray="2 3" opacity="0.6" />
+  
+  <!-- Shield Body -->
+  <path d="M32 12C24 16 17 18 17 26C17 40 26 49 32 52C38 49 47 40 47 26C47 18 40 16 32 12Z" fill="#141722" stroke="#dfcf93" stroke-width="2.5" stroke-linejoin="round" />
+  
+  <!-- Inner Lock Body -->
+  <rect x="25" y="30" width="14" height="11" rx="2.5" fill="#dfcf93" />
+  <!-- Lock Shackle -->
+  <path d="M27.5 30V26C27.5 23.5 29.5 21.5 32 21.5C34.5 21.5 36.5 23.5 36.5 26V30" stroke="#dfcf93" stroke-width="2.2" stroke-linecap="round" fill="none" />
+  <!-- Keyhole / Spark -->
+  <circle cx="32" cy="34.5" r="1.5" fill="#0d0e13" />
+  <path d="M32 35.5V38.5" stroke="#0d0e13" stroke-width="1.5" stroke-linecap="round" />
+</svg>
