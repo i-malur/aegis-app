@@ -130,22 +130,29 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
         }),
       });
 
-      const data: ScanResult = await response.json();
+      // 1. Obtém a resposta como texto
+      const rawText = await response.text();
+
+      // 2. Limpa os marcadores de código Markdown ```json e ```
+      const cleanJson = rawText.replace(/```json|```/g, '').trim();
+
+      // 3. Converte para o objeto de resultado
+      const data: ScanResult = JSON.parse(cleanJson);
+
       setScanResult(data);
     } catch (err) {
       console.error('Scan error:', err);
-      // Fallback
+      // Fallback em caso de erro real de rede ou formato
       setScanResult({
         status: 'suspicious',
         threatScore: 65,
-        verdictTitle: 'Suspeita de Engenharia Social',
-        category: 'Verificação em Modo de Segurança',
-        summary: 'Identificamos características comumente usadas em abordagens fraudulentas. Cautela recomendada.',
+        verdictTitle: 'Verificação em Modo de Segurança',
+        category: 'Modo de Segurança Ativo',
+        summary: 'Não foi possível concluir a varredura profunda no momento. Na dúvida, NÃO clique e NÃO compartilhe dados.',
         fraudIndicators: [
-          'Solicitação de dados ou valores sem canal oficial de autenticação',
-          'Padrão de mensagem com senso artificial de pressa ou urgência',
+          'Instabilidade temporária na análise automática',
         ],
-        recommendation: 'Não clique em links e confirme a informação diretamente pelos canais oficiais da empresa.',
+        recommendation: 'Procure o canal oficial da instituição mencionada.',
         canReport: true,
       });
     } finally {
@@ -193,16 +200,14 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
                 setActiveCategory(cat.id);
                 setScanResult(null);
               }}
-              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-[#3a6ea5]/25 border-[#70f3ff]/40 shadow-md ring-1 ring-[#70f3ff]/30'
-                  : 'bg-[#1b1d23] border-[#2a2e39] text-[#d2d2d2] hover:border-[#323744] hover:bg-[#23262f]'
-              }`}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${isSelected
+                ? 'bg-[#3a6ea5]/25 border-[#70f3ff]/40 shadow-md ring-1 ring-[#70f3ff]/30'
+                : 'bg-[#1b1d23] border-[#2a2e39] text-[#d2d2d2] hover:border-[#323744] hover:bg-[#23262f]'
+                }`}
             >
               <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${
-                  isSelected ? 'bg-[#3a6ea5] text-[#70f3ff] shadow-xs' : 'bg-[#23262f] text-[#686868]'
-                }`}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${isSelected ? 'bg-[#3a6ea5] text-[#70f3ff] shadow-xs' : 'bg-[#23262f] text-[#686868]'
+                  }`}
               >
                 <Icon className="w-5 h-5" />
               </div>
@@ -211,17 +216,16 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
                   {cat.label}
                 </span>
                 <span
-                  className={`text-xs block mt-0.5 ${
-                    isSelected ? 'text-[#70f3ff] font-medium' : 'text-[#686868]'
-                  }`}
+                  className={`text-xs block mt-0.5 ${isSelected ? 'text-[#70f3ff] font-medium' : 'text-[#686868]'
+                    }`}
                 >
                   {cat.id === 'link'
                     ? 'URLs e Domínios'
                     : cat.id === 'sms'
-                    ? 'WhatsApp e SMS'
-                    : cat.id === 'email'
-                    ? 'Remetente e Phishing'
-                    : 'Pix e Boletos'}
+                      ? 'WhatsApp e SMS'
+                      : cat.id === 'email'
+                        ? 'Remetente e Phishing'
+                        : 'Pix e Boletos'}
                 </span>
               </div>
             </button>
@@ -255,11 +259,10 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
-            dragActive
-              ? 'border-[#70f3ff] bg-[#3a6ea5]/20'
-              : 'border-[#323744] hover:border-[#70f3ff]/40 bg-[#14151a]/60'
-          }`}
+          className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all ${dragActive
+            ? 'border-[#70f3ff] bg-[#3a6ea5]/20'
+            : 'border-[#323744] hover:border-[#70f3ff]/40 bg-[#14151a]/60'
+            }`}
         >
           {selectedFile || previewImage ? (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -375,25 +378,23 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
       {/* Scan Results Presentation */}
       {scanResult && (
         <div
-          className={`rounded-2xl border p-6 sm:p-7 space-y-6 shadow-xl transition-all ${
-            scanResult.status === 'dangerous'
-              ? 'bg-[#1b1d23] border-rose-500/40'
-              : scanResult.status === 'suspicious'
+          className={`rounded-2xl border p-6 sm:p-7 space-y-6 shadow-xl transition-all ${scanResult.status === 'dangerous'
+            ? 'bg-[#1b1d23] border-rose-500/40'
+            : scanResult.status === 'suspicious'
               ? 'bg-[#1b1d23] border-[#dfcf93]/40'
               : 'bg-[#1b1d23] border-emerald-500/40'
-          }`}
+            }`}
         >
           {/* Header Verdict */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#2a2e39]">
             <div className="flex items-center gap-3.5">
               <div
-                className={`p-3 rounded-2xl ${
-                  scanResult.status === 'dangerous'
-                    ? 'bg-rose-600 text-white shadow-sm'
-                    : scanResult.status === 'suspicious'
+                className={`p-3 rounded-2xl ${scanResult.status === 'dangerous'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : scanResult.status === 'suspicious'
                     ? 'bg-[#dfcf93] text-[#14151a] shadow-sm'
                     : 'bg-emerald-600 text-white shadow-sm'
-                }`}
+                  }`}
               >
                 {scanResult.status === 'dangerous' ? (
                   <AlertOctagon className="w-7 h-7" />
@@ -406,19 +407,18 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      scanResult.status === 'dangerous'
-                        ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
-                        : scanResult.status === 'suspicious'
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${scanResult.status === 'dangerous'
+                      ? 'bg-rose-950/60 text-rose-300 border border-rose-500/40'
+                      : scanResult.status === 'suspicious'
                         ? 'bg-[#dfcf93]/20 text-[#dfcf93] border border-[#dfcf93]/40'
                         : 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
-                    }`}
+                      }`}
                   >
                     {scanResult.status === 'dangerous'
                       ? 'Perigo • Golpe Identificado'
                       : scanResult.status === 'suspicious'
-                      ? 'Atenção • Risco Elevado'
-                      : 'Seguro • Nenhuma Ameaça Detectada'}
+                        ? 'Atenção • Risco Elevado'
+                        : 'Seguro • Nenhuma Ameaça Detectada'}
                   </span>
                   <span className="text-xs text-[#686868] font-medium">
                     Score: {scanResult.threatScore}/100
@@ -437,13 +437,12 @@ export const ScannerCentralView: React.FC<ScannerCentralViewProps> = ({
                   Índice de Risco
                 </span>
                 <span
-                  className={`font-heading font-bold text-xl ${
-                    scanResult.threatScore > 70
-                      ? 'text-rose-400'
-                      : scanResult.threatScore > 35
+                  className={`font-heading font-bold text-xl ${scanResult.threatScore > 70
+                    ? 'text-rose-400'
+                    : scanResult.threatScore > 35
                       ? 'text-[#dfcf93]'
                       : 'text-emerald-400'
-                  }`}
+                    }`}
                 >
                   {scanResult.threatScore}%
                 </span>

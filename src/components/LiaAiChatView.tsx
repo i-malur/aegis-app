@@ -263,7 +263,7 @@ export const LiaAiChatView: React.FC<LiaAiChatViewProps> = ({
                   <span className="font-semibold text-[#70f3ff]">
                     {isLia ? 'Lia • Especialista' : 'Você'}
                   </span>
-                  <span className="text-[#686868]">{msg.timestamp}</span>
+                  <span className="text-[#FFFFFF]">{msg.timestamp}</span>
                 </div>
 
                 {/* Content with basic formatting */}

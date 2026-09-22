@@ -30,6 +30,33 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
+// Função de Retry focada EXCLUSIVAMENTE no modelo suportado
+async function generateContentWithRetry(ai: any, contents: any, config?: any, retries = 3) {
+  const model = "gemini-3.6-flash";
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        ...(config ? { config } : {}),
+      });
+      return response;
+    } catch (err: any) {
+      const isUnavailable = err?.status === 503 || err?.message?.includes("503") || err?.message?.includes("high demand");
+
+      // Se for erro 503 de alta procura e ainda houver tentativas, aguarda 2s e tenta de novo
+      if (isUnavailable && attempt < retries) {
+        console.warn(`[Gemini API] Modelo \({model} em alta procura (503). Tentativa\){attempt}/${retries}. A aguardar 2s...`);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
+      }
+
+      throw err;
+    }
+  }
+}
+
 // In-memory data store for collaborative blacklist & user reports
 interface CollaborativeReport {
   id: string;
@@ -282,24 +309,7 @@ app.post("/api/chat", async (req, res) => {
 
     const ai = getGeminiClient();
 
-    const systemInstruction = `
-Você é "Lia", a Inteligência Artificial e especialista em Segurança Digital do aplicativo "Aegis".
-Seu tom é acolhedor, altamente empático, extremamente didático, claro, acessível e focado em empoderar qualquer pessoa (incluindo jovens, adultos e idosos) a se proteger contra golpes virtuais.
-Você nunca usa jargões técnicos herméticos sem explicá-los de forma simples.
-
-Conhecimento principal:
-- Golpes no Brasil: Golpe do Pix, Falsa Central Bancária, Golpe do Amor (Romance Scam), Clonagem e Falso Familiar no WhatsApp, Falso Emprego no Telegram/TikTok, Boleto Falso/Adulterado, Golpe da Falsa Restituição do Imposto de Renda, Golpe do IPVA/Detran, Phishing bancário.
-- Protocolos Oficiais e Leis Brasileiras: MED (Mecanismo Especial de Devolução do Banco Central para estorno Pix em até 80 dias), Boletim de Ocorrência na Delegacia Eletrônica / de Crimes Cibernéticos, Notificação do Banco (canal de fraude), Notificação ao Procon, Safernet Brasil (denúncia de crimes na web), LGPD e bloqueio do CPF (Registrato do Banco Central).
-- Instruções Pós-Golpe: Acalmar a vítima (a culpa NUNCA é da vítima; golpistas usam engenharia social sofisticada), passar o checklist imediato de contenção (1. Ligar no SAC/Fraude do banco para ativar MED; 2. Registrar BO; 3. Desconectar sessões e alterar senhas).
-- Verificação de senhas seguras, autenticação em duas etapas (2FA) via app autenticador.
-
-Diretrizes de resposta:
-- Responda sempre em Português do Brasil de forma estruturada, com tópicos claros quando houver passos a seguir.
-- Se o usuário relatar que acabou de sofrer um golpe, dê um abraço virtual/acolhimento sincero e imediatamente forneça as ações de emergência passo a passo.
-`;
-
     if (!ai) {
-      // Fallback response if API key is not yet configured
       return res.json({
         reply: `Olá! Eu sou a Lia, sua especialista em segurança digital do Aegis. 🛡️\n\nEstou operando no modo de proteção local. Para garantir a segurança dos seus dados:\n\n1. **Nunca compartilhe senhas ou códigos SMS recebidos por mensagem.**\n2. **Bancos nunca pedem para você fazer transferências Pix para 'cancelar uma compra'.**\n3. **Se você desconfiar de uma ligação, desligue e ligue você mesmo no número oficial atrás do seu cartão de crédito.**\n\nComo posso te ajudar a se proteger hoje?`,
         suggestedActions: [
@@ -310,32 +320,34 @@ Diretrizes de resposta:
       });
     }
 
-    // Build context with conversation history
-    const historyText = Array.isArray(conversationHistory)
-      ? conversationHistory
-          .slice(-6)
-          .map((m: { role: string; content: string }) => `${m.role === "user" ? "Usuário" : "Lia"}: ${m.content}`)
-          .join("\n")
-      : "";
+    const systemInstruction = `Você é "Lia", a Inteligência Artificial especialista em Segurança Digital do aplicativo "Aegis".
+Seu tom é acolhedor, altamente empático, didático, claro e focado em proteger as pessoas contra golpes virtuais.
+Responda sempre em Português do Brasil de forma estruturada.`;
 
-    const fullPrompt = historyText
-      ? `Histórico recente da conversa:\n${historyText}\n\nNova mensagem do Usuário: ${message}\n\nResponda como Lia:`
-      : message;
+    // Monta o histórico de forma limpa para o prompt
+    let promptContext = `[Instruções de Sistema: ${systemInstruction}]\n\n`;
+    
+    if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+      const historyText = conversationHistory
+        .slice(-6)
+        .map((m: { role: string; content: string }) => `\({m.role === "user" ? "Usuário" : "Lia"}:\){m.content}`)
+        .join("\n");
+      promptContext += `Histórico da conversa:\n${historyText}\n\n`;
+    }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: fullPrompt,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
+    promptContext += `Usuário: ${message}\nLia:`;
+
+    // Chamada direta e compatível com a SDK @google/genai
+    const response = await generateContentWithRetry(ai, promptContext, {
+      systemInstruction,
+      temperature: 0.7,
     });
 
-    const reply = response.text || "Desculpe, não consegui processar a resposta neste momento. Por favor, tente novamente.";
+    const reply = response.text || "Desculpe, não consegui processar a resposta no momento.";
 
     return res.json({ reply });
   } catch (error: any) {
-    console.error("Chat error:", error);
+    console.error("ERRO REAL NO TERMINAL DO VS CODE:", error?.message || error);
     return res.status(500).json({
       error: "Erro ao comunicar com a Lia.",
       reply: "Desculpe, tive uma instabilidade momentânea na conexão segura. Se você acabou de sofrer um golpe, lembre-se: entre em contato imediatamente com o seu banco para acionar o MED do Pix e faça um Boletim de Ocorrência na Delegacia Eletrônica.",
@@ -368,10 +380,10 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
   "category": "Categoria do golpe ou da verificação",
   "summary": "Resumo de 2 a 3 frases explicando de forma clara o que foi detectado e o nível de risco.",
   "fraudIndicators": [
-    "Lista com 2 a 4 pontos de evidência detectados (ex: Domínio recém-criado que imita o Nubank; Senso falso de urgência e ameaça de bloqueio; Código de barras com banco divergente; etc.)"
+    "Lista com 2 a 4 pontos de evidência detectados"
   ],
   "recommendation": "Instrução clara e direta do que o usuário DEVE e NÃO DEVE fazer agora.",
-  "officialChannels": "Se aplicável, nome do canal oficial correto ou link legítimo (ex: 'Acesse apenas gov.br ou aplicativo oficial do seu banco')",
+  "officialChannels": "Se aplicável, nome do canal oficial correto ou link legítimo",
   "canReport": true
 }
 `;
@@ -420,26 +432,24 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
       text: analysisPrompt,
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: { parts },
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
+    const response = await generateContentWithRetry(ai, analysisPrompt);
 
     const resultText = response.text || "{}";
+    
     try {
-      const parsed = JSON.parse(resultText);
+      // TRATAMENTO CRÍTICO: Limpa marcadores de código Markdown ```json e ``` antes do parse
+      const cleanedJson = resultText.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleanedJson);
       return res.json(parsed);
-    } catch {
+    } catch (parseError) {
+      console.error("Erro no parse do JSON do Gemini:", parseError, "Resposta bruta:", resultText);
       return res.json({
         status: "suspicious",
         threatScore: 60,
         verdictTitle: "Análise Requer Cautela",
         category: "Verificação de Segurança",
-        summary: resultText,
-        fraudIndicators: ["Padrões não conclusivos, recomendamos cautela."],
+        summary: "A análise automática identificou trechos suspeitos. Recomendamos cautela ao prosseguir.",
+        fraudIndicators: ["Formatação da resposta não conclusiva, proceda com cuidado."],
         recommendation: "Não forneça dados pessoais ou bancários sem antes confirmar com a empresa por um canal oficial.",
         canReport: true,
       });
@@ -453,7 +463,7 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
       verdictTitle: "Verificação Inconclusiva",
       category: "Erro Técnico",
       summary: "Não foi possível concluir a varredura profunda no momento. Na dúvida, NÃO clique e NÃO compartilhe dados.",
-      fraudIndicators: ["Serviço em manutenção"],
+      fraudIndicators: ["Falha de conexão com os servidores de inteligência"],
       recommendation: "Procure o canal oficial da instituição mencionada.",
       canReport: false,
     });
