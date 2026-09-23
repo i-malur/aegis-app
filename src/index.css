@@ -66,10 +66,3 @@ h1, h2, h3, h4, h5, h6, .font-heading {
   outline: none;
 }
 
-.chat-timestamp,
-.message-timestamp {
-  color: rgba(255, 255, 255, 0.75); /* Branco com 75% de opacidade para contraste ideal */
-  font-size: 0.75rem;
-  font-weight: 400;
-}
-

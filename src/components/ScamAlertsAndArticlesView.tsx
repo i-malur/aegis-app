@@ -5,7 +5,6 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
-  Image as ImageIcon,
   Video,
   FileText,
   Check,
@@ -17,7 +16,6 @@ import {
   Sparkles,
   ArrowLeft,
   X,
-  Upload,
   CheckCircle2,
   Info,
   Clock,
@@ -34,11 +32,6 @@ import {
 } from 'lucide-react';
 import { CommunityAlert, CommunityArticle, ActiveTab, StateScamData } from '../types';
 import { useAuth } from '../context/AuthContext';
-import {
-  AEGIS_LOGO_IMG,
-  MORANGO_DO_AMOR_IMG,
-  GOLPE_MAQUININHA_IMG,
-} from '../assets/branding';
 import { SECURITY_NEWS } from '../data/securityData';
 import { BRAZIL_ALL_STATES_SCAMS } from '../data/brazilStatesScams';
 
@@ -55,9 +48,7 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
   const [activeSubTab, setActiveSubTab] = useState<'alerts' | 'articles' | 'news' | 'map'>('alerts');
   const [alerts, setAlerts] = useState<CommunityAlert[]>([]);
   const [articles, setArticles] = useState<CommunityArticle[]>([]);
-  const [expandedAlertIds, setExpandedAlertIds] = useState<Record<string, boolean>>({
-    'alert-1': true, // Expanded by default to match Figma mockup
-  });
+  const [expandedAlertIds, setExpandedAlertIds] = useState<Record<string, boolean>>({});
 
   // Map & News States
   const [selectedStateCode, setSelectedStateCode] = useState<string>('SP');
@@ -77,7 +68,6 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
   const [alertDescription, setAlertDescription] = useState('');
   const [alertVictimAdvice, setAlertVictimAdvice] = useState('');
   const [alertCategory, setAlertCategory] = useState('Golpe Comercial / Pix');
-  const [alertMediaPreview, setAlertMediaPreview] = useState<string>('');
   const [alertAwareConsent, setAlertAwareConsent] = useState(true);
   const [alertTruthConsent, setAlertTruthConsent] = useState(true);
 
@@ -87,7 +77,6 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
   const [articleAuthorEmail, setArticleAuthorEmail] = useState(user?.email || '');
   const [articleContent, setArticleContent] = useState('');
   const [articleCategory, setArticleCategory] = useState('Dica de Especialista');
-  const [articleMediaPreview, setArticleMediaPreview] = useState<string>('');
   const [articleAwareConsent, setArticleAwareConsent] = useState(true);
   const [articleTruthConsent, setArticleTruthConsent] = useState(true);
 
@@ -180,21 +169,6 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isAlert: boolean) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (isAlert) {
-          setAlertMediaPreview(reader.result as string);
-        } else {
-          setArticleMediaPreview(reader.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleCreateAlertSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!alertTitle.trim() || !alertDescription.trim() || !alertVictimAdvice.trim()) return;
@@ -214,7 +188,7 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
           victimAdvice: alertVictimAdvice,
           authorName: alertAuthorName.trim() || 'Usuário da Comunidade Aegis',
           authorEmail: alertAuthorEmail.trim(),
-          imageUrl: alertMediaPreview || MORANGO_DO_AMOR_IMG,
+          imageUrl: '',
           category: alertCategory,
         }),
       });
@@ -258,7 +232,7 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
           content: articleContent,
           authorName: articleAuthorName.trim() || 'Colaborador Aegis',
           authorEmail: articleAuthorEmail.trim(),
-          imageUrl: articleMediaPreview || GOLPE_MAQUININHA_IMG,
+          imageUrl: '',
           category: articleCategory,
         }),
       });
@@ -441,29 +415,24 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
               return (
                 <div
                   key={alert.id}
-                  className="rounded-3xl overflow-hidden shadow-2xl transition-all duration-300 flex flex-col bg-[#1e232d] border border-[#2e3748]"
+                  className="rounded-3xl overflow-hidden shadow-2xl transition-all duration-300 flex flex-col self-start h-fit bg-[#1e232d] border border-[#2e3748]"
                 >
-                  {/* Top Image (Figma Style) */}
-                  <div className="w-full h-48 sm:h-52 bg-[#14151a] overflow-hidden relative">
-                    <img
-                      src={alert.imageUrl || MORANGO_DO_AMOR_IMG}
-                      alt={alert.title}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-                    />
-                    <div className="absolute top-3 left-3">
-                      <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-xs text-white border border-white/20">
-                        {alert.category}
-                      </span>
-                    </div>
+                  {/* Category - No Image */}
+                  <div className="px-5 sm:px-6 pt-5 sm:pt-6 bg-[#356799]">
+                    <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/20 text-white border border-white/20">
+                      {alert.category}
+                    </span>
                   </div>
 
                   {/* Card Body - Classic Blue Container from Figma Mockup */}
-                  <div className="bg-[#356799] p-5 sm:p-6 text-white flex-1 flex flex-col justify-between">
+                  <div className="bg-[#356799] px-5 pb-5 sm:px-6 sm:pb-6 text-white w-full">
                     {/* Header Row with Chevron Accordion Toggle */}
-                    <div
+                    <button
+                      type="button"
                       onClick={() => toggleAlertAccordion(alert.id)}
-                      className="flex items-center justify-between gap-3 cursor-pointer select-none group"
+                      aria-expanded={isExpanded}
+                      aria-controls={`alert-content-${alert.id}`}
+                      className="w-full flex items-center justify-between gap-3 text-left cursor-pointer select-none group"
                     >
                       <h3 className="font-heading font-extrabold text-base sm:text-lg leading-snug group-hover:text-amber-200 transition-colors">
                         {alert.title}
@@ -475,11 +444,14 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
                           <ChevronDown className="w-5 h-5 text-white stroke-[2.5]" />
                         )}
                       </div>
-                    </div>
+                    </button>
 
                     {/* Accordion Content */}
                     {isExpanded ? (
-                      <div className="mt-4 pt-4 border-t border-white/20 space-y-4 animate-fade-in text-xs sm:text-sm leading-relaxed text-blue-50">
+                      <div
+                        id={`alert-content-${alert.id}`}
+                        className="mt-4 pt-4 border-t border-white/20 space-y-4 animate-fade-in text-xs sm:text-sm leading-relaxed text-blue-50"
+                      >
                         {/* Scam Description */}
                         <p className="whitespace-pre-line text-blue-50/95 font-normal">
                           {alert.description}
@@ -959,45 +931,8 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
                   </div>
                 </div>
 
-                {/* Media Upload Banner */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-white uppercase tracking-wider block">
-                    Multimídia / Imagem do Golpe
-                  </label>
-                  <div className="relative rounded-2xl bg-[#131418] hover:bg-[#1b1d23] transition-all p-5 text-center cursor-pointer border border-dashed border-[#323744] hover:border-[#70f3ff]/60 shadow-sm flex flex-col items-center justify-center min-h-[130px] overflow-hidden group">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, true)}
-                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    />
-
-                    {alertMediaPreview ? (
-                      <div className="relative w-full h-36 rounded-xl overflow-hidden">
-                        <img
-                          src={alertMediaPreview}
-                          alt="Preview do alerta"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-2">
-                          <Upload className="w-4 h-4" />
-                          <span>Clique para trocar de imagem</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-[#d2d2d2]">
-                        <div className="w-12 h-12 rounded-2xl bg-[#1b1d23] border border-[#2a2e39] flex items-center justify-center text-[#70f3ff] group-hover:scale-105 transition-transform">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                        <span className="font-heading font-semibold text-xs sm:text-sm text-white">
-                          Clique ou arraste um print/foto da fraude
-                        </span>
-                        <span className="text-[11px] text-[#686868]">
-                          Formatos suportados: JPG, PNG, WEBP (Máx. 5MB)
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <div className="rounded-2xl bg-[#131418] border border-[#2a2e39] p-4 text-xs text-[#94a3b8]">
+                  Publicação sem imagem: o conteúdo será exibido apenas em formato textual.
                 </div>
 
                 {/* Fields: Title & Category */}
@@ -1169,45 +1104,8 @@ export const ScamAlertsAndArticlesView: React.FC<ScamAlertsAndArticlesViewProps>
                   </div>
                 </div>
 
-                {/* Media Upload Banner */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-white uppercase tracking-wider block">
-                    Imagem de Capa da Matéria
-                  </label>
-                  <div className="relative rounded-2xl bg-[#131418] hover:bg-[#1b1d23] transition-all p-5 text-center cursor-pointer border border-dashed border-[#323744] hover:border-[#a48ca7]/60 shadow-sm flex flex-col items-center justify-center min-h-[130px] overflow-hidden group">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleImageUpload(e, false)}
-                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
-                    />
-
-                    {articleMediaPreview ? (
-                      <div className="relative w-full h-36 rounded-xl overflow-hidden">
-                        <img
-                          src={articleMediaPreview}
-                          alt="Preview do artigo"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-2">
-                          <Upload className="w-4 h-4" />
-                          <span>Clique para alterar capa</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-[#d2d2d2]">
-                        <div className="w-12 h-12 rounded-2xl bg-[#1b1d23] border border-[#2a2e39] flex items-center justify-center text-[#a48ca7] group-hover:scale-105 transition-transform">
-                          <ImageIcon className="w-6 h-6" />
-                        </div>
-                        <span className="font-heading font-semibold text-xs sm:text-sm text-white">
-                          Clique ou arraste uma foto ilustrativa da matéria
-                        </span>
-                        <span className="text-[11px] text-[#686868]">
-                          Tamanho sugerido: 1200x630 (PNG, JPG)
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                <div className="rounded-2xl bg-[#131418] border border-[#2a2e39] p-4 text-xs text-[#94a3b8]">
+                  Publicação sem imagem: o conteúdo será exibido apenas em formato textual.
                 </div>
 
                 {/* Fields: Title & Category */}
