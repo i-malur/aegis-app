@@ -1133,9 +1133,6 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Aegis Server listening on http://0.0.0.0:${PORT}`);
-  });
 }
 
 startServer();
