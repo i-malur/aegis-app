@@ -1,13 +1,14 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -30,8 +31,52 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Função de Retry focada EXCLUSIVAMENTE no modelo suportado
-async function generateContentWithRetry(ai: any, contents: any, config?: any, retries = 3) {
+// Lazy Groq client helper (Fallback)
+let groqClient: Groq | null = null;
+function getGroqClient(): Groq | null {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
+  if (!groqClient) {
+    groqClient = new Groq({ apiKey });
+  }
+  return groqClient;
+}
+
+// Função para chamar o Groq quando o Gemini falhar
+async function generateWithGroqFallback(
+  systemInstruction: string,
+  userPrompt: string
+): Promise<string> {
+  const groq = getGroqClient();
+  if (!groq) {
+    throw new Error("GROQ_API_KEY não configurada no servidor.");
+  }
+
+  console.log("⚡ Executando análise de contingência via Groq (Llama 3.3)...");
+  const completion = await groq.chat.completions.create({
+    messages: [
+      { role: "system", content: systemInstruction },
+      { role: "user", content: userPrompt },
+    ],
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.3,
+  });
+
+  const responseText = completion.choices[0]?.message?.content;
+  if (!responseText) {
+    throw new Error("Resposta vazia retornada pelo Groq.");
+  }
+
+  return responseText;
+}
+
+// Função de Retry focada EXCLUSIVAMENTE no modelo Gemini com Fallback para Groq
+async function generateContentWithRetry(
+  ai: any,
+  contents: any,
+  config?: any,
+  retries = 2
+) {
   const model = "gemini-3.6-flash";
 
   for (let attempt = 1; attempt <= retries; attempt++) {
@@ -41,18 +86,27 @@ async function generateContentWithRetry(ai: any, contents: any, config?: any, re
         contents,
         ...(config ? { config } : {}),
       });
-      return response;
+      return response.text;
     } catch (err: any) {
-      const isUnavailable = err?.status === 503 || err?.message?.includes("503") || err?.message?.includes("high demand");
+      console.warn(
+        `[Gemini API] Falha na tentativa ${attempt}/${retries}: ${err?.message || err}`
+      );
 
-      // Se for erro 503 de alta procura e ainda houver tentativas, aguarda 2s e tenta de novo
-      if (isUnavailable && attempt < retries) {
-        console.warn(`[Gemini API] Modelo \({model} em alta procura (503). Tentativa\){attempt}/${retries}. A aguardar 2s...`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
         continue;
       }
 
-      throw err;
+      // Se todas as tentativas com o Gemini falharem, dispara o fallback para o Groq
+      console.warn("⚠️ Tentativas do Gemini esgotadas. Acionando fallback do Groq...");
+      
+      const systemInstruction =
+        config?.systemInstruction ||
+        "Você é a inteligência de segurança do Aegis especialista em detecção de golpes virtuais.";
+      
+      const promptText = typeof contents === "string" ? contents : JSON.stringify(contents);
+      
+      return await generateWithGroqFallback(systemInstruction, promptText);
     }
   }
 }
@@ -145,8 +199,8 @@ const anonymousPostsList: AnonymousPost[] = [
     avatarColor: "#3a6ea5",
     category: "relato_golpe",
     tagLabel: "Relato de Golpe",
-    title: "Consegui recuperar R$ 1.800 através do MED do Banco Central!",
-    content: "Quero deixar meu depoimento de esperança para quem foi vítima. Caí no golpe da falsa taxa alfandegária e transferi R$ 1.800 via Pix. Segui o passo a passo que vi aqui no Aegis: liguei pro banco em menos de 15 minutos, abri contestação de fraude MED e registrei o BO eletrônico. Hoje, 4 dias depois, o banco bloqueou a conta laranja e me devolveu o valor integral!",
+    title: "Consegui recuperar R\$ 1.800 através do MED do Banco Central!",
+    content: "Quero deixar meu depoimento de esperança para quem foi vítima. Caí no golpe da falsa taxa alfandegária e transferi R\$ 1.800 via Pix. Segui o passo a passo que vi aqui no Aegis: liguei pro banco em menos de 15 minutos, abri contestação de fraude MED e registrei o BO eletrônico. Hoje, 4 dias depois, o banco bloqueou a conta laranja e me devolveu o valor integral!",
     createdAt: new Date(Date.now() - 3600000 * 14).toISOString(),
     likesCount: 184,
     commentsCount: 12,
@@ -170,7 +224,7 @@ const anonymousPostsList: AnonymousPost[] = [
     category: "duvida_seguranca",
     tagLabel: "Dúvida de Segurança",
     title: "Recebi ligação do número 0800 dizendo ser do banco, é confiável?",
-    content: "O número no identificador era exatamente o 0800 oficial do banco impresso atrás do meu cartão. A pessoa sabia meu nome e disse que tentaram fazer um Pix de R$ 4.500. Desconfiei e desliguei. É possível falsificarem o número do próprio banco?",
+    content: "O número no identificador era exatamente o 0800 oficial do banco impresso atrás do meu cartão. A pessoa sabia meu nome e disse que tentaram fazer um Pix de R\$ 4.500. Desconfiei e desliguei. É possível falsificarem o número do próprio banco?",
     createdAt: new Date(Date.now() - 3600000 * 22).toISOString(),
     likesCount: 76,
     commentsCount: 8,
@@ -205,7 +259,7 @@ const communityReports: CollaborativeReport[] = [
     type: "phone",
     target: "(11) 98721-4409",
     title: "Falsa Central Telefônica Nubank",
-    description: "Ligação automatizada alegando compra suspeita de R$ 3.850 na Casas Bahia pedindo para teclar 2 para cancelar.",
+    description: "Ligação automatizada alegando compra suspeita de R\$ 3.850 na Casas Bahia pedindo para teclar 2 para cancelar.",
     evidenceCount: 18,
     reportedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
     status: "verified",
@@ -244,7 +298,7 @@ const communityReports: CollaborativeReport[] = [
     type: "sms",
     target: "Remetente: 28490",
     title: "Golpe 'Mãe, troquei de número'",
-    description: "Mensagem solicitando depósito urgente de R$ 1.200 no Pix com alegação de urgência médica.",
+    description: "Mensagem solicitando depósito urgente de R\$ 1.200 no Pix com alegação de urgência médica.",
     evidenceCount: 54,
     reportedAt: new Date(Date.now() - 3600000 * 36).toISOString(),
     status: "verified",
@@ -289,7 +343,7 @@ const blacklistPhones: BlacklistPhone[] = [
     reputation: "dangerous",
     reportsCount: 63,
     lastReported: "Ontem, 09:15",
-    notes: "Aborda pelo WhatsApp oferecendo R$ 500/dia para curtir vídeos no TikTok.",
+    notes: "Aborda pelo WhatsApp oferecendo R\$ 500/dia para curtir vídeos no TikTok.",
   },
 ];
 
@@ -308,8 +362,13 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const ai = getGeminiClient();
+    const groq = getGroqClient();
 
-    if (!ai) {
+    const systemInstruction = `Você é "Lia", a Inteligência Artificial especialista em Segurança Digital do aplicativo "Aegis".
+Seu tom é acolhedor, altamente empático, didático, claro e focado em proteger as pessoas contra golpes virtuais.
+Responda sempre em Português do Brasil de forma estruturada.`;
+
+    if (!ai && !groq) {
       return res.json({
         reply: `Olá! Eu sou a Lia, sua especialista em segurança digital do Aegis. 🛡️\n\nEstou operando no modo de proteção local. Para garantir a segurança dos seus dados:\n\n1. **Nunca compartilhe senhas ou códigos SMS recebidos por mensagem.**\n2. **Bancos nunca pedem para você fazer transferências Pix para 'cancelar uma compra'.**\n3. **Se você desconfiar de uma ligação, desligue e ligue você mesmo no número oficial atrás do seu cartão de crédito.**\n\nComo posso te ajudar a se proteger hoje?`,
         suggestedActions: [
@@ -320,32 +379,35 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    const systemInstruction = `Você é "Lia", a Inteligência Artificial especialista em Segurança Digital do aplicativo "Aegis".
-Seu tom é acolhedor, altamente empático, didático, claro e focado em proteger as pessoas contra golpes virtuais.
-Responda sempre em Português do Brasil de forma estruturada.`;
-
-    // Monta o histórico de forma limpa para o prompt
     let promptContext = `[Instruções de Sistema: ${systemInstruction}]\n\n`;
     
     if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
       const historyText = conversationHistory
         .slice(-6)
-        .map((m: { role: string; content: string }) => `\({m.role === "user" ? "Usuário" : "Lia"}:\){m.content}`)
+        .map((m: { role: string; content: string }) => `${m.role === "user" ? "Usuário" : "Lia"}: ${m.content}`)
         .join("\n");
       promptContext += `Histórico da conversa:\n${historyText}\n\n`;
     }
 
     promptContext += `Usuário: ${message}\nLia:`;
 
-    // Chamada direta e compatível com a SDK @google/genai
-    const response = await generateContentWithRetry(ai, promptContext, {
-      systemInstruction,
-      temperature: 0.7,
-    });
+    let reply = "";
 
-    const reply = response.text || "Desculpe, não consegui processar a resposta no momento.";
+    if (ai) {
+      try {
+        reply = await generateContentWithRetry(ai, promptContext, {
+          systemInstruction,
+          temperature: 0.7,
+        });
+      } catch (geminiError) {
+        console.warn("⚠️ Falha final no Gemini. Tentando direto pelo Groq:", geminiError);
+        reply = await generateWithGroqFallback(systemInstruction, promptContext);
+      }
+    } else if (groq) {
+      reply = await generateWithGroqFallback(systemInstruction, promptContext);
+    }
 
-    return res.json({ reply });
+    return res.json({ reply: reply || "Desculpe, não consegui processar a resposta no momento." });
   } catch (error: any) {
     console.error("ERRO REAL NO TERMINAL DO VS CODE:", error?.message || error);
     return res.status(500).json({
@@ -360,11 +422,12 @@ app.post("/api/analyze-content", async (req, res) => {
   try {
     const { type, content, imageBase64, mimeType, fileName } = req.body;
     const ai = getGeminiClient();
+    const groq = getGroqClient();
+
+    const systemInstruction = `Você é o motor central de cibersegurança do aplicativo Aegis.
+Analise detalhadamente o item fornecido pelo usuário para detectar fraudes, phishing, boletos adulterados, malware, engenharia social, falsos remetentes ou spoofing.`;
 
     const analysisPrompt = `
-Você é o motor central de cibersegurança do aplicativo Aegis.
-Analise detalhadamente o item fornecido pelo usuário para detectar fraudes, phishing, boletos adulterados, malware, engenharia social, falsos remetentes ou spoofing.
-
 Tipo de análise solicitada: ${type} (pode ser "link", "sms", "email", "boleto", "file", "profile")
 Nome do arquivo (se houver): ${fileName || "Nenhum"}
 Texto / Link / Conteúdo:
@@ -372,7 +435,7 @@ Texto / Link / Conteúdo:
 ${content || "Verifique a imagem em anexo"}
 """
 
-Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exato:
+Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exato sem marcadores de código Markdown:
 {
   "status": "safe" | "suspicious" | "dangerous",
   "threatScore": number (0 a 100, onde 0 é 100% seguro e 100 é golpe fatal),
@@ -388,8 +451,7 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
 }
 `;
 
-    if (!ai) {
-      // Heuristic intelligent fallback when no key is set
+    if (!ai && !groq) {
       const isDangerous =
         /pix|urgente|bloqueado|cancelar compra|clique aqui|bit\.ly|tinyurl|atualizacao cadastral|recadastramento|premio|ganhou|taxa alfandega|correios-taxa/i.test(
           content || ""
@@ -419,30 +481,38 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
       });
     }
 
-    const parts: any[] = [];
-    if (imageBase64 && mimeType) {
-      parts.push({
-        inlineData: {
-          mimeType,
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
-        },
-      });
+    let resultText = "";
+
+    if (ai) {
+      try {
+        const parts: any[] = [];
+        if (imageBase64 && mimeType) {
+          parts.push({
+            inlineData: {
+              mimeType,
+              data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
+            },
+          });
+        }
+        parts.push({ text: analysisPrompt });
+
+        resultText = await generateContentWithRetry(ai, parts, {
+          systemInstruction,
+        });
+      } catch (geminiError) {
+        console.warn("⚠️ Falha ao analisar com Gemini. Acionando fallback no Groq...", geminiError);
+        resultText = await generateWithGroqFallback(systemInstruction, analysisPrompt);
+      }
+    } else if (groq) {
+      resultText = await generateWithGroqFallback(systemInstruction, analysisPrompt);
     }
-    parts.push({
-      text: analysisPrompt,
-    });
 
-    const response = await generateContentWithRetry(ai, analysisPrompt);
-
-    const resultText = response.text || "{}";
-    
     try {
-      // TRATAMENTO CRÍTICO: Limpa marcadores de código Markdown ```json e ``` antes do parse
       const cleanedJson = resultText.replace(/```json|```/g, "").trim();
       const parsed = JSON.parse(cleanedJson);
       return res.json(parsed);
     } catch (parseError) {
-      console.error("Erro no parse do JSON do Gemini:", parseError, "Resposta bruta:", resultText);
+      console.error("Erro no parse do JSON do provedor de IA:", parseError, "Resposta bruta:", resultText);
       return res.json({
         status: "suspicious",
         threatScore: 60,
@@ -472,7 +542,7 @@ Você DEVE retornar rigorosamente um JSON estruturado com o seguinte formato exa
 
 // Leak Checker & Impersonation Radar
 app.post("/api/leak-check", (req, res) => {
-  const { query, type } = req.body; // type: 'email' | 'cpf' | 'phone' | 'username'
+  const { query, type } = req.body;
 
   if (!query) {
     return res.status(400).json({ error: "Dado para consulta é obrigatório." });
@@ -480,7 +550,6 @@ app.post("/api/leak-check", (req, res) => {
 
   const cleanQuery = String(query).trim().toLowerCase();
   
-  // Realistically simulate checks against known historic mega breaches & social media impersonations
   const sampleBreaches = [
     {
       title: "Megavazamento de 223 Milhões de CPFs (2021)",
@@ -508,15 +577,13 @@ app.post("/api/leak-check", (req, res) => {
     },
   ];
 
-  // Determine realistic breached status
-  const isCpf = type === "cpf" || /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}$/.test(cleanQuery);
-  const isBreached = true; // In Brazil almost all adult CPFs/emails have been in at least 1-2 major compiled breaches
+  const isCpf = type === "cpf" || /^\d{3}\.?\d{3}\.?\d{3}-?\d{2}\$/.test(cleanQuery);
+  const isBreached = true;
 
   const breachesFound = isCpf
     ? [sampleBreaches[0], sampleBreaches[2]]
     : [sampleBreaches[1], sampleBreaches[0]];
 
-  // Simulated social media impersonation scan
   const impersonationAlerts = [
     {
       platform: "Instagram",
@@ -667,7 +734,7 @@ const communityAlertsList: CommunityAlertItem[] = [
   {
     id: "alert-2",
     title: "Golpe da entrega e maquininha com visor quebrado",
-    description: "Motoboy chega alegando entrega surpresa de presente ou brinde de aniversário enviado por amigos, mas exige pagamento de 'taxa de entrega' de R$ 7,90 apenas no cartão. A maquininha tem visor apagado ou adulterado e passa valores de R$ 3.000 a R$ 5.000.",
+    description: "Motoboy chega alegando entrega surpresa de presente ou brinde de aniversário enviado por amigos, mas exige pagamento de 'taxa de entrega' de R\$ 7,90 apenas no cartão. A maquininha tem visor apagado ou adulterado e passa valores de R\$ 3.000 a R\$ 5.000.",
     victimAdvice: "Nunca pague taxas de presentes não solicitados. Se passou o cartão, abra o app do banco na hora e bloqueie o cartão provisoriamente. Comunique a fraude à central de segurança do emissor do cartão para contestação imediata da transação.",
     imageUrl: "/src/assets/images/golpe_maquininha_1787795068932.jpg",
     authorName: "Mariana Silva (Colaboradora)",
@@ -966,7 +1033,6 @@ app.delete("/api/auth/profile/:id", (req, res) => {
     return res.status(404).json({ error: "Usuário não encontrado." });
   }
 
-  // Remove user
   registeredUsers.splice(index, 1);
   res.json({ message: "Conta e dados excluídos permanentemente com sucesso." });
 });
@@ -986,7 +1052,6 @@ app.post("/api/posts", (req, res) => {
     return res.status(400).json({ error: "Título e conteúdo da publicação são obrigatórios." });
   }
 
-  // Generate random anonymous shield pseudonym
   const randomNum = Math.floor(100 + Math.random() * 900);
   const pseudonymPool = [
     "Cidadão Anônimo",
@@ -1115,7 +1180,6 @@ app.get("/api/user/submissions", (req, res) => {
     },
   });
 });
-
 
 // Vite Middleware integration
 async function startServer() {
