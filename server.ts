@@ -59,7 +59,7 @@ async function generateWithGroqFallback(
       { role: "user", content: userPrompt },
     ],
     model: "openai/gpt-oss-20b",
-    temperature: 0.3,+
+    temperature: 0.3,
   });
 
   const responseText = completion.choices[0]?.message?.content;
