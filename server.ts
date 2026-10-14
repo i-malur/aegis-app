@@ -77,7 +77,7 @@ async function generateContentWithRetry(
   config?: any,
   retries = 2
 ) {
-  const model = "gemini-3.6-flash";
+  const model = "gemini-1.5-flash";
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
