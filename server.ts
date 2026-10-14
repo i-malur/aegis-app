@@ -58,8 +58,8 @@ async function generateWithGroqFallback(
       { role: "system", content: systemInstruction },
       { role: "user", content: userPrompt },
     ],
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.3,
+    model: "openai/gpt-oss-20b",
+    temperature: 0.3,+
   });
 
   const responseText = completion.choices[0]?.message?.content;
